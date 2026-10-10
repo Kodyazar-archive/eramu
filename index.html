@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Molecular Studio - İnteraktif 3D Molekül Laboratuvarı</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- ÜST NAVİGASYON -->
+    <header class="glass-panel">
+        <div style="display: flex; align-items: center; gap: 14px;">
+            <div class="clay-button btn-icon" style="border-radius: 50%; font-size: 20px;">⚛</div>
+            <div>
+                <div style="font-weight: 700; font-size: 16px; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px;">
+                    MOLECULAR STUDIO
+                    <span class="clay-pill">Canlı 3D Laboratuvar</span>
+                </div>
+                <div style="font-size: 11px; color: var(--cream-300);">Kolay ve Eğlenceli Moleküler Keşif Alanı</div>
+            </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <div style="background: rgba(35, 50, 43, 0.7); padding: 6px 12px; border-radius: 14px; border: 1px solid rgba(247, 245, 240, 0.1); display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 12px; color: var(--cream-200); font-weight: 600;">Hazır Molekül:</span>
+                <select id="moleculeSelect" onchange="loadPresetMolecule(this.value)">
+                    <option value="methane">Metan (CH₄)</option>
+                    <option value="water">Su (H₂O)</option>
+                    <option value="co2">Karbondioksit (CO₂)</option>
+                    <option value="ammonia">Amonyak (NH₃)</option>
+                    <option value="ethanol">Etanol (C₂H₅OH)</option>
+                    <option value="caffeine">Kafein (C₈H₁₀N₄O₂)</option>
+                </select>
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+                <button onclick="undo()" title="Geri Al" class="clay-button btn-icon">↩</button>
+                <button onclick="redo()" title="İleri Al" class="clay-button btn-icon">↪</button>
+                <button onclick="openModal('discoveryModal')" class="clay-button" style="padding: 0 14px; height: 42px; font-size: 12px; background: linear-gradient(145deg, #4A7A60, #2E4E3D);">🏆 Keşif Defteri (<span id="discoveryCount">1</span>)</button>
+                <button onclick="saveProject()" class="clay-button" style="padding: 0 14px; height: 42px; font-size: 12px;">💾 Kaydet</button>
+            </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <button onclick="resetCamera()" title="Kamerayı Sıfırla" class="clay-button" style="padding: 0 14px; height: 38px; font-size: 12px;">🎯 Ortala</button>
+            <button onclick="toggleAutoRotate()" id="autoRotateBtn" class="clay-button btn-icon" title="Otomatik Çevir">🔄</button>
+            <button onclick="openModal('tutorialModal')" class="clay-button btn-icon" title="Nasıl Kullanılır?">❔</button>
+        </div>
+    </header>
+
+    <!-- REHBER BANNER -->
+    <div class="guide-banner">
+        <span>💡 <strong>İpucu:</strong></span>
+        <span>1️⃣ Atomları birleştirerek yeni moleküller üretin, program onları anında tanısın!</span>
+        <span>2️⃣ Keşfettiğiniz her yapı üst menüdeki <strong>Keşif Defteri</strong>'ne otomatik eklenir.</span>
+    </div>
+
+    <!-- ANA ÇALIŞMA ALANI -->
+    <div class="workspace">
+
+        <!-- SOL ARAÇ ÇUBUĞU -->
+        <sidebar class="toolbar glass-panel">
+            <div style="font-size: 9px; font-weight: 700; color: var(--cream-300); opacity: 0.7; text-transform: uppercase;">İşlem</div>
+
+            <button onclick="setTool('select')" id="tool-select" class="clay-button btn-icon active" title="Seç ve İncele">👆</button>
+            <button onclick="setTool('addAtom')" id="tool-addAtom" class="clay-button btn-icon" title="Atom Ekle">➕</button>
+            <button onclick="setTool('addBond')" id="tool-addBond" class="clay-button btn-icon" title="Bağ Kur">🔗</button>
+            <button onclick="setTool('measure')" id="tool-measure" class="clay-button btn-icon" title="Mesafe Ölç">📏</button>
+            <button onclick="deleteSelected()" id="tool-delete" class="clay-button btn-icon" style="color: #FF8B8B;" title="Sil">🗑️</button>
+
+            <div style="width: 24px; height: 1px; background: rgba(247, 245, 240, 0.15); margin: 6px 0;"></div>
+
+            <div style="font-size: 9px; font-weight: 700; color: var(--cream-300); opacity: 0.7; text-transform: uppercase;">Görünüm</div>
+
+            <button onclick="setVisMode('ballStick')" id="vis-ballStick" class="clay-button btn-icon active" style="font-size: 10px; font-weight: 700;">Top&Çubuk</button>
+            <button onclick="setVisMode('spaceFilling')" id="vis-spaceFilling" class="clay-button btn-icon" style="font-size: 10px; font-weight: 700;">Hacim</button>
+            <button onclick="setVisMode('wireframe')" id="vis-wireframe" class="clay-button btn-icon" style="font-size: 10px; font-weight: 700;">Kafes</button>
+        </sidebar>
+
+        <!-- 3D VIZYONER ÇALIŞMA ALANI -->
+        <main class="viewport-container glass-panel">
+            <canvas id="moleculeCanvas"></canvas>
+
+            <div style="position: absolute; top: 16px; left: 16px; display: flex; flex-direction: column; gap: 8px; pointer-events: none;">
+                <div id="interactionFeedback" style="background: rgba(35, 50, 43, 0.95); border: 1px solid rgba(247, 245, 240, 0.2); padding: 8px 14px; border-radius: 12px; font-size: 12px; display: flex; align-items: center; gap: 8px; pointer-events: auto;">
+                    <span style="width: 8px; height: 8px; border-radius: 50%; background: #7CB99E;"></span>
+                    <span id="feedbackText">Molekül Yüklendi: Metan (CH₄)</span>
+                </div>
+                <div id="measureOutput" class="hidden" style="background: rgba(194, 120, 82, 0.95); border: 1px solid var(--cream-100); padding: 8px 14px; border-radius: 12px; font-size: 12px; font-weight: 600; pointer-events: auto; color: #FFF;"></div>
+            </div>
+
+            <!-- Atom Ekleme Paleti & Wiki Butonu -->
+            <div id="atomPalette" class="hidden" style="position: absolute; top: 16px; left: 50%; transform: translateX(-50%); background: rgba(35, 50, 43, 0.95); border: 1px solid rgba(247, 245, 240, 0.3); padding: 10px 18px; border-radius: 20px; display: flex; align-items: center; gap: 10px; backdrop-filter: blur(16px); z-index: 20;">
+                <span style="font-size: 11px; font-weight: 700; color: var(--cream-200);">Element Seç:</span>
+                <button onclick="setSelectedElement('C')" class="clay-button" style="padding: 5px 10px; font-size: 11px;">C</button>
+                <button onclick="setSelectedElement('H')" class="clay-button" style="padding: 5px 10px; font-size: 11px;">H</button>
+                <button onclick="setSelectedElement('O')" class="clay-button" style="padding: 5px 10px; font-size: 11px; background: linear-gradient(145deg, #C25B5B, #9E3D3D);">O</button>
+                <button onclick="setSelectedElement('N')" class="clay-button" style="padding: 5px 10px; font-size: 11px; background: linear-gradient(145deg, #4A72B2, #31528A);">N</button>
+                <div style="width: 1px; height: 20px; background: rgba(247,245,240,0.2); margin: 0 4px;"></div>
+                <button onclick="openPeriodicTableWiki()" class="clay-button" style="padding: 5px 12px; font-size: 11px; background: linear-gradient(145deg, #4A7A60, #2E4E3D);" title="Wikipedia Periyodik Tablo">📖 Daha fazla element?</button>
+            </div>
+        </main>
+
+        <!-- SAĞ İSPEKTÖR PANELİ -->
+        <aside class="inspector glass-panel">
+            <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(247, 245, 240, 0.15); padding-bottom: 12px; margin-bottom: 16px;">
+                    <div style="font-size: 13px; font-weight: 700; letter-spacing: 0.5px;">🔬 KİMYASAL ANALİZ</div>
+                    <span class="clay-pill" style="font-size: 10px;">Detay</span>
+                </div>
+
+                <!-- Molekül Özeti & Dinamik Açıklama -->
+                <div class="clay-card" style="padding: 16px; margin-bottom: 16px;">
+                    <div style="font-size: 11px; color: var(--cream-300); margin-bottom: 2px;">Tanımlanan Yapı</div>
+                    <div id="molName" style="font-size: 18px; font-weight: 700;">Metan</div>
+                    <div id="molFormula" style="font-size: 14px; color: var(--terracotta); font-weight: 700; margin-bottom: 8px;">CH₄</div>
+                    <div id="molDescriptionBox" style="font-size: 11px; color: var(--cream-200); line-height: 1.4; background: rgba(18, 26, 20, 0.4); padding: 8px; border-radius: 8px; margin-bottom: 10px;">
+                        Doğalgazın ana bileşeni olan renksiz ve kokusuz gazdır.
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11px;">
+                        <div style="background: rgba(18, 26, 20, 0.6); padding: 8px; border-radius: 8px;">
+                            <div style="color: var(--cream-300); opacity: 0.7; font-size: 9px;">Molekül Ağırlığı</div>
+                            <div id="molMass" style="font-weight: 700;">16.04 g/mol</div>
+                        </div>
+                        <div style="background: rgba(18, 26, 20, 0.6); padding: 8px; border-radius: 8px;">
+                            <div style="color: var(--cream-300); opacity: 0.7; font-size: 9px;">Toplam Atom</div>
+                            <div id="molAtomCount" style="font-weight: 700;">5 atom</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Seçili Atom Detayları -->
+                <div>
+                    <div style="font-size: 11px; font-weight: 700; color: var(--cream-200); margin-bottom: 8px; text-transform: uppercase;">Seçili Atom Özellikleri</div>
+
+                    <div id="noSelectionMsg" style="background: rgba(35, 50, 43, 0.4); padding: 14px; border-radius: 12px; border: 1px solid rgba(247, 245, 240, 0.1); text-align: center; font-size: 11px; color: var(--cream-300); line-height: 1.4;">
+                        👆 3D alandaki herhangi bir atoma tıklayarak element özelliklerini burada görün.
+                    </div>
+
+                    <div id="atomDetails" class="clay-card hidden" style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div id="atomSymbolBadge" class="badge-element" style="background: #333; color: #fff;">C</div>
+                                <div>
+                                    <div id="atomElementName" style="font-weight: 700; font-size: 14px;">Karbon</div>
+                                    <div id="atomIDText" style="font-size: 10px; color: var(--cream-300);">ID: atom-0</div>
+                                </div>
+                            </div>
+                            <span id="atomNumberBadge" class="clay-pill" style="font-weight: 700;">Z = 6</span>
+                        </div>
+
+                        <div id="elementDescriptionBox" style="background: rgba(18, 26, 20, 0.7); padding: 10px; border-radius: 10px; font-size: 11px; color: var(--cream-200); line-height: 1.4; border-left: 3px solid var(--terracotta);">
+                            <strong>Özellik:</strong> Yaşamın temel taşıdır.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid rgba(247, 245, 240, 0.15); padding-top: 12px;">
+                <button onclick="centerMolecule()" class="clay-button" style="padding: 10px; font-size: 12px; width: 100%;">🎯 Molekülü Ortala</button>
+                <button onclick="openModal('exportModal')" class="clay-button" style="padding: 10px; font-size: 12px; width: 100%;">📥 JSON veya PDB İndir</button>
+            </div>
+        </aside>
+    </div>
+
+    <!-- ALT DURUM ÇUBUĞU -->
+    <footer class="glass-panel">
+        <div style="display: flex; gap: 20px; align-items: center;">
+            <span>Görünüm Modu: <strong id="statusVisMode" style="color: var(--cream-100);">Top & Çubuk</strong></span>
+            <span>Aktif Araç: <strong id="statusActiveTool" style="color: var(--cream-100);">Seçim</strong></span>
+            <span>Performans: <strong id="fpsCounter" style="color: #7CB99E;">60</strong> FPS</span>
+        </div>
+        <div>Tıkla & Sürükle: Döndür | Tekerlek: Yakınlaş</div>
+    </footer>
+
+    <!-- İLK GİRİŞ TUTORIAL / REHBER MODALI -->
+    <div id="tutorialModal" class="modal-overlay">
+        <div class="clay-card" style="padding: 28px; max-width: 520px; width: 100%; display: flex; flex-direction: column; gap: 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(247, 245, 240, 0.15); padding-bottom: 12px;">
+                <h3 style="font-size: 18px; font-weight: 700; color: var(--cream-100);">🌟 Molecular Studio'ya Hoş Geldiniz!</h3>
+                <button onclick="closeModal('tutorialModal')" style="background: none; border: none; color: var(--cream-100); font-size: 18px; cursor: pointer;">✕</button>
+            </div>
+            <p style="font-size: 13px; line-height: 1.6; color: var(--cream-200);">
+                Burası sizin kişisel 3D molekül laboratuvarınız. Laboratuvarda yapabilecekleriniz çok basit:
+            </p>
+            <div style="display: flex; flex-direction: column; gap: 10px; font-size: 12px; color: var(--cream-200);">
+                <div style="background: rgba(35, 50, 43, 0.6); padding: 10px; border-radius: 10px; display: flex; gap: 10px; align-items: center;">
+                    <span style="font-size: 20px;">🔄</span>
+                    <div><strong>1. Çevir ve İncele:</strong> Fareyle ekrana basıp sürükleyerek molekülleri her açıdan döndürün.</div>
+                </div>
+                <div style="background: rgba(35, 50, 43, 0.6); padding: 10px; border-radius: 10px; display: flex; gap: 10px; align-items: center;">
+                    <span style="font-size: 20px;">➕</span>
+                    <div><strong>2. Atom Ekle & Bağ Kur:</strong> Sol menüden araçları seçerek yeni atomlar ekleyin ve moleküller üretin.</div>
+                </div>
+                <div style="background: rgba(35, 50, 43, 0.6); padding: 10px; border-radius: 10px; display: flex; gap: 10px; align-items: center;">
+                    <span style="font-size: 20px;">🏆</span>
+                    <div><strong>3. Keşif Defteri:</strong> Oluşturduğunuz her yeni bileşik otomatik olarak defterinize işlenir!</div>
+                </div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
+                <button onclick="closeModal('tutorialModal')" class="clay-button" style="padding: 10px 22px; font-size: 13px; background: linear-gradient(145deg, #4A7A60, #2E4E3D);">Laboratuvara Başla 🚀</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- KEŞİF DEFTERİ MODALI -->
+    <div id="discoveryModal" class="modal-overlay hidden">
+        <div class="clay-card" style="padding: 24px; max-width: 520px; width: 100%; display: flex; flex-direction: column; gap: 16px; max-height: 80vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(247, 245, 240, 0.15); padding-bottom: 10px;">
+                <h3 style="font-size: 16px; font-weight: 700;">🏆 Laboratuvar Keşif Defteri</h3>
+                <button onclick="closeModal('discoveryModal')" style="background: none; border: none; color: var(--cream-100); font-size: 18px; cursor: pointer;">✕</button>
+            </div>
+            <p style="font-size: 12px; color: var(--cream-200);">Laboratuvarda başarıyla oluşturduğunuz veya incelediğiniz tüm moleküller burada toplanır:</p>
+            <div id="discoveryList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            <div style="display: flex; justify-content: flex-end;">
+                <button onclick="closeModal('discoveryModal')" class="clay-button" style="padding: 8px 18px; font-size: 12px;">Kapat</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DIŞA AKTAR MODALI -->
+    <div id="exportModal" class="modal-overlay hidden">
+        <div class="clay-card" style="padding: 24px; max-width: 420px; width: 100%; display: flex; flex-direction: column; gap: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(247, 245, 240, 0.15); padding-bottom: 10px;">
+                <h3 style="font-size: 16px; font-weight: 700;">📥 Veri Dışa Aktar</h3>
+                <button onclick="closeModal('exportModal')" style="background: none; border: none; color: var(--cream-100); font-size: 18px; cursor: pointer;">✕</button>
+            </div>
+            <button onclick="exportJSON()" class="clay-button" style="padding: 12px; justify-content: space-between; text-align: left;">
+                <div>
+                    <div style="font-weight: 700; font-size: 13px;">JSON Veri Dosyası</div>
+                    <div style="font-size: 10px; opacity: 0.7;">Tüm 3D koordinatlar ve bağlar</div>
+                </div>
+                <span>📄</span>
+            </button>
+            <button onclick="exportPDB()" class="clay-button" style="padding: 12px; justify-content: space-between; text-align: left;">
+                <div>
+                    <div style="font-weight: 700; font-size: 13px;">PDB Formatı</div>
+                    <div style="font-size: 10px; opacity: 0.7;">Standart bilimsel laboratuvar formatı</div>
+                </div>
+                <span>🧪</span>
+            </button>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
